@@ -175,7 +175,7 @@ opendal://<scheme>/<root-path>
 
 | Part | Description |
 |------|-------------|
-| `scheme` | OpenDAL backend: `s3`, `gcs`, `azblob`, `gdrive`, `fs` |
+| `scheme` | OpenDAL backend: `s3`, `gcs`, `azblob`, `gdrive`, `webdav`, `fs` |
 | `root-path` | Path inside the backend that acts as the repository root |
 
 For bucketed/container backends (`s3`, `gcs`, `azblob`), the first path
@@ -273,6 +273,24 @@ export OPENDAL_GDRIVE_ACCESS_TOKEN=my-access-token
 
 git push origin main
 ```
+
+---
+
+### WebDAV (Nextcloud, ownCloud, …)
+
+```bash
+git remote add origin opendal://webdav/remote.php/dav/files/my-user/myrepo
+
+export OPENDAL_WEBDAV_ENDPOINT=https://cloud.example.com
+export OPENDAL_WEBDAV_USERNAME=my-user
+export OPENDAL_WEBDAV_PASSWORD=my-app-password
+
+git push origin main
+```
+
+The URL path is the repository root on the server; the endpoint (scheme +
+host, and any base path your server needs) is configured via
+`OPENDAL_WEBDAV_ENDPOINT`.
 
 ---
 

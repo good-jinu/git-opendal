@@ -16,8 +16,9 @@ mod gcs;
 mod gdrive;
 mod memory;
 mod s3;
+mod webdav;
 
-const USER_SUPPORTED_SCHEMES: &str = "s3, gcs, azblob, gdrive, fs";
+const USER_SUPPORTED_SCHEMES: &str = "s3, gcs, azblob, gdrive, webdav, fs";
 
 /// Build a configured [`Operator`] for the remote.
 pub async fn build_operator(cfg: &RemoteConfig) -> Result<Operator> {
@@ -28,6 +29,7 @@ pub async fn build_operator(cfg: &RemoteConfig) -> Result<Operator> {
         "gcs" => gcs::build_gcs(cfg)?,
         "azblob" => azblob::build_azblob(cfg)?,
         "gdrive" => gdrive::build_gdrive(cfg)?,
+        "webdav" => webdav::build_webdav(cfg)?,
         "fs" => fs::build_fs(cfg)?,
         "memory" => memory::build_memory()?,
         other => bail!(
@@ -47,7 +49,10 @@ mod tests {
 
     #[test]
     fn user_supported_schemes_do_not_advertise_memory() {
-        assert_eq!(USER_SUPPORTED_SCHEMES, "s3, gcs, azblob, gdrive, fs");
+        assert_eq!(
+            USER_SUPPORTED_SCHEMES,
+            "s3, gcs, azblob, gdrive, webdav, fs"
+        );
         assert!(!USER_SUPPORTED_SCHEMES.contains("memory"));
     }
 }

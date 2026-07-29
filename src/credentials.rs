@@ -53,6 +53,7 @@ pub fn specs_for_scheme(scheme: &str) -> &'static [ParamSpec] {
         "gcs" => GCS_SPECS,
         "azblob" => AZBLOB_SPECS,
         "gdrive" => GDRIVE_SPECS,
+        "webdav" => WEBDAV_SPECS,
         _ => &[],
     }
 }
@@ -203,6 +204,33 @@ static GDRIVE_SPECS: &[ParamSpec] = &[
         required: false,
         sensitive: true,
         prompt: false,
+        validator: None,
+    },
+];
+
+static WEBDAV_SPECS: &[ParamSpec] = &[
+    ParamSpec {
+        key: "endpoint",
+        description: "WebDAV server URL (e.g. https://cloud.example.com)",
+        required: true,
+        sensitive: false,
+        prompt: true,
+        validator: Some(validate_url),
+    },
+    ParamSpec {
+        key: "username",
+        description: "WebDAV username (blank for anonymous)",
+        required: false,
+        sensitive: false,
+        prompt: true,
+        validator: None,
+    },
+    ParamSpec {
+        key: "password",
+        description: "WebDAV password or app token",
+        required: false,
+        sensitive: true,
+        prompt: true,
         validator: None,
     },
 ];

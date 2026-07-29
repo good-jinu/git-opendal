@@ -26,6 +26,7 @@ opendal = { version = "0.56", features = [
     "services-gcs",
     "services-azblob",
     "services-gdrive",
+    "services-webdav",
     "services-fs",
     "services-memory",
     "layers-logging",

@@ -47,6 +47,9 @@
 //! | | `OPENDAL_GDRIVE_CLIENT_SECRET`| OAuth2 Client Secret. |
 //! | | `OPENDAL_GDRIVE_REFRESH_TOKEN`| OAuth2 Refresh Token. |
 //! | | `OPENDAL_GDRIVE_ACCESS_TOKEN` | Temporary Access Token. |
+//! | **WebDAV** | `OPENDAL_WEBDAV_ENDPOINT` | **Required.** Server URL (e.g., `https://cloud.example.com`). |
+//! | | `OPENDAL_WEBDAV_USERNAME` | Basic-auth username. |
+//! | | `OPENDAL_WEBDAV_PASSWORD` | Basic-auth password or app token. |
 
 use anyhow::{Result, bail};
 use std::collections::HashMap;
