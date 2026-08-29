@@ -58,34 +58,153 @@ pub fn specs_for_scheme(scheme: &str) -> &'static [ParamSpec] {
 }
 
 static S3_SPECS: &[ParamSpec] = &[
-    ParamSpec { key: "bucket",             description: "S3 bucket name",                         required: true,  sensitive: false, prompt: true,  validator: None              },
-    ParamSpec { key: "region",             description: "AWS region (e.g. us-east-1)",            required: false, sensitive: false, prompt: true,  validator: None              },
-    ParamSpec { key: "endpoint",           description: "Custom endpoint URL (blank to skip)",    required: false, sensitive: false, prompt: true,  validator: Some(validate_url) },
-    ParamSpec { key: "access-key-id",      description: "AWS access key ID (blank for IAM auth)", required: false, sensitive: false, prompt: true,  validator: None              },
-    ParamSpec { key: "secret-access-key",  description: "AWS secret access key",                  required: false, sensitive: true,  prompt: true,  validator: None              },
+    ParamSpec {
+        key: "bucket",
+        description: "S3 bucket name",
+        required: true,
+        sensitive: false,
+        prompt: true,
+        validator: None,
+    },
+    ParamSpec {
+        key: "region",
+        description: "AWS region (e.g. us-east-1)",
+        required: false,
+        sensitive: false,
+        prompt: true,
+        validator: None,
+    },
+    ParamSpec {
+        key: "endpoint",
+        description: "Custom endpoint URL (blank to skip)",
+        required: false,
+        sensitive: false,
+        prompt: true,
+        validator: Some(validate_url),
+    },
+    ParamSpec {
+        key: "access-key-id",
+        description: "AWS access key ID (blank for IAM auth)",
+        required: false,
+        sensitive: false,
+        prompt: true,
+        validator: None,
+    },
+    ParamSpec {
+        key: "secret-access-key",
+        description: "AWS secret access key",
+        required: false,
+        sensitive: true,
+        prompt: true,
+        validator: None,
+    },
 ];
 
 static GCS_SPECS: &[ParamSpec] = &[
-    ParamSpec { key: "bucket",           description: "GCS bucket name",                             required: true,  sensitive: false, prompt: true,  validator: None              },
-    ParamSpec { key: "credential-path",  description: "Service account JSON path (blank for ADC)",  required: false, sensitive: false, prompt: true,  validator: None              },
+    ParamSpec {
+        key: "bucket",
+        description: "GCS bucket name",
+        required: true,
+        sensitive: false,
+        prompt: true,
+        validator: None,
+    },
+    ParamSpec {
+        key: "credential-path",
+        description: "Service account JSON path (blank for ADC)",
+        required: false,
+        sensitive: false,
+        prompt: true,
+        validator: None,
+    },
     // credential (raw JSON) is intentionally not prompted — use credential-path instead
-    ParamSpec { key: "credential",       description: "Raw GCS credential JSON",                     required: false, sensitive: true,  prompt: false, validator: None              },
-    ParamSpec { key: "endpoint",         description: "Custom GCS endpoint URL (blank to skip)",     required: false, sensitive: false, prompt: true,  validator: Some(validate_url) },
+    ParamSpec {
+        key: "credential",
+        description: "Raw GCS credential JSON",
+        required: false,
+        sensitive: true,
+        prompt: false,
+        validator: None,
+    },
+    ParamSpec {
+        key: "endpoint",
+        description: "Custom GCS endpoint URL (blank to skip)",
+        required: false,
+        sensitive: false,
+        prompt: true,
+        validator: Some(validate_url),
+    },
 ];
 
 static AZBLOB_SPECS: &[ParamSpec] = &[
-    ParamSpec { key: "container",     description: "Azure Blob container name",                  required: true,  sensitive: false, prompt: true,  validator: None              },
-    ParamSpec { key: "account-name",  description: "Azure storage account name",                required: false, sensitive: false, prompt: true,  validator: None              },
-    ParamSpec { key: "account-key",   description: "Azure storage account key",                 required: false, sensitive: true,  prompt: true,  validator: None              },
-    ParamSpec { key: "endpoint",      description: "Custom Azure endpoint URL (blank to skip)",  required: false, sensitive: false, prompt: true,  validator: Some(validate_url) },
+    ParamSpec {
+        key: "container",
+        description: "Azure Blob container name",
+        required: true,
+        sensitive: false,
+        prompt: true,
+        validator: None,
+    },
+    ParamSpec {
+        key: "account-name",
+        description: "Azure storage account name",
+        required: false,
+        sensitive: false,
+        prompt: true,
+        validator: None,
+    },
+    ParamSpec {
+        key: "account-key",
+        description: "Azure storage account key",
+        required: false,
+        sensitive: true,
+        prompt: true,
+        validator: None,
+    },
+    ParamSpec {
+        key: "endpoint",
+        description: "Custom Azure endpoint URL (blank to skip)",
+        required: false,
+        sensitive: false,
+        prompt: true,
+        validator: Some(validate_url),
+    },
 ];
 
 static GDRIVE_SPECS: &[ParamSpec] = &[
-    ParamSpec { key: "client-id",      description: "OAuth2 client ID",                  required: false, sensitive: false, prompt: true,  validator: None },
-    ParamSpec { key: "client-secret",  description: "OAuth2 client secret",              required: false, sensitive: true,  prompt: true,  validator: None },
-    ParamSpec { key: "refresh-token",  description: "OAuth2 refresh token",              required: false, sensitive: true,  prompt: true,  validator: None },
+    ParamSpec {
+        key: "client-id",
+        description: "OAuth2 client ID",
+        required: false,
+        sensitive: false,
+        prompt: true,
+        validator: None,
+    },
+    ParamSpec {
+        key: "client-secret",
+        description: "OAuth2 client secret",
+        required: false,
+        sensitive: true,
+        prompt: true,
+        validator: None,
+    },
+    ParamSpec {
+        key: "refresh-token",
+        description: "OAuth2 refresh token",
+        required: false,
+        sensitive: true,
+        prompt: true,
+        validator: None,
+    },
     // access-token expires quickly; not worth prompting — use refresh-token instead
-    ParamSpec { key: "access-token",   description: "OAuth2 access token (temporary)",  required: false, sensitive: true,  prompt: false, validator: None },
+    ParamSpec {
+        key: "access-token",
+        description: "OAuth2 access token (temporary)",
+        required: false,
+        sensitive: true,
+        prompt: false,
+        validator: None,
+    },
 ];
 
 // ─── Public entry point ───────────────────────────────────────────────────────
@@ -100,7 +219,10 @@ pub fn resolve(cfg: &mut RemoteConfig) -> Result<()> {
     }
 
     let git_dir = std::env::var("GIT_DIR").ok().filter(|s| !s.is_empty());
-    debug!("credentials::resolve scheme={} git_dir={:?}", cfg.scheme, git_dir);
+    debug!(
+        "credentials::resolve scheme={} git_dir={:?}",
+        cfg.scheme, git_dir
+    );
 
     for spec in specs {
         // 1. Env var already populated this key — highest priority, skip.
@@ -116,7 +238,10 @@ pub fn resolve(cfg: &mut RemoteConfig) -> Result<()> {
                 debug!("param '{}' loaded from .git/config", spec.key);
                 cfg.params.insert(spec.key.to_string(), value);
             } else {
-                debug!("param '{}' was previously skipped (empty in .git/config)", spec.key);
+                debug!(
+                    "param '{}' was previously skipped (empty in .git/config)",
+                    spec.key
+                );
             }
             continue;
         }
@@ -155,7 +280,10 @@ pub fn resolve(cfg: &mut RemoteConfig) -> Result<()> {
                 }
                 cfg.params.insert(spec.key.to_string(), v.clone());
                 if let Err(e) = git_config_set(&git_dir, &cfg.scheme, spec.key, &v) {
-                    eprintln!("Warning: could not save '{}' to .git/config: {}", spec.key, e);
+                    eprintln!(
+                        "Warning: could not save '{}' to .git/config: {}",
+                        spec.key, e
+                    );
                 }
             }
         }
@@ -171,10 +299,7 @@ pub fn resolve(cfg: &mut RemoteConfig) -> Result<()> {
 /// The injector receives the `ParamSpec` and returns `Ok(Some(value))`, `Ok(None)`
 /// (blank / skip), or `Err` (abort).  Used in unit tests to avoid a real terminal.
 #[cfg(test)]
-pub fn resolve_with_injector<F>(
-    cfg: &mut RemoteConfig,
-    mut injector: F,
-) -> Result<()>
+pub fn resolve_with_injector<F>(cfg: &mut RemoteConfig, mut injector: F) -> Result<()>
 where
     F: FnMut(&ParamSpec) -> Result<Option<String>>,
 {
@@ -202,10 +327,7 @@ where
         let value = injector(spec)?;
 
         match value {
-            None if spec.required => bail!(
-                "Required parameter '{}' was not provided.",
-                spec.key
-            ),
+            None if spec.required => bail!("Required parameter '{}' was not provided.", spec.key),
             None => {
                 let _ = git_config_set(&git_dir, &cfg.scheme, spec.key, "");
                 continue;
@@ -238,12 +360,7 @@ fn git_config_get(git_dir: &Option<String>, scheme: &str, key: &str) -> Option<S
     }
 }
 
-fn git_config_set(
-    git_dir: &Option<String>,
-    scheme: &str,
-    key: &str,
-    value: &str,
-) -> Result<()> {
+fn git_config_set(git_dir: &Option<String>, scheme: &str, key: &str, value: &str) -> Result<()> {
     let config_key = format!("opendal.{}.{}", scheme, key);
     let mut cmd = std::process::Command::new("git");
     cmd.args(["config", "--local", &config_key, value]);
@@ -310,8 +427,7 @@ fn prompt_secret(spec: &ParamSpec) -> Result<Option<String>> {
     } else {
         format!("{} (blank to skip): ", spec.description)
     };
-    let v = rpassword::prompt_password(&label)
-        .with_context(|| tty_unavailable_hint(spec.key))?;
+    let v = rpassword::prompt_password(&label).with_context(|| tty_unavailable_hint(spec.key))?;
     let v = v.trim().to_string();
     Ok(if v.is_empty() { None } else { Some(v) })
 }
@@ -327,8 +443,7 @@ fn tty_unavailable_hint(key: &str) -> String {
 
 #[cfg(unix)]
 fn open_tty_read(_key: &str) -> Result<std::fs::File> {
-    std::fs::File::open("/dev/tty")
-        .context("Cannot open /dev/tty for input")
+    std::fs::File::open("/dev/tty").context("Cannot open /dev/tty for input")
 }
 
 #[cfg(unix)]
@@ -381,7 +496,10 @@ mod tests {
     #[test]
     fn specs_s3_bucket_is_required() {
         let specs = specs_for_scheme("s3");
-        let bucket = specs.iter().find(|s| s.key == "bucket").expect("bucket spec");
+        let bucket = specs
+            .iter()
+            .find(|s| s.key == "bucket")
+            .expect("bucket spec");
         assert!(bucket.required);
         assert!(!bucket.sensitive);
         assert!(bucket.prompt);
@@ -390,7 +508,10 @@ mod tests {
     #[test]
     fn specs_s3_secret_is_sensitive() {
         let specs = specs_for_scheme("s3");
-        let secret = specs.iter().find(|s| s.key == "secret-access-key").expect("secret spec");
+        let secret = specs
+            .iter()
+            .find(|s| s.key == "secret-access-key")
+            .expect("secret spec");
         assert!(!secret.required);
         assert!(secret.sensitive);
         assert!(secret.prompt);
@@ -414,14 +535,20 @@ mod tests {
     #[test]
     fn gcs_credential_has_no_prompt() {
         let specs = specs_for_scheme("gcs");
-        let cred = specs.iter().find(|s| s.key == "credential").expect("credential spec");
+        let cred = specs
+            .iter()
+            .find(|s| s.key == "credential")
+            .expect("credential spec");
         assert!(!cred.prompt);
     }
 
     #[test]
     fn gdrive_access_token_has_no_prompt() {
         let specs = specs_for_scheme("gdrive");
-        let tok = specs.iter().find(|s| s.key == "access-token").expect("access-token spec");
+        let tok = specs
+            .iter()
+            .find(|s| s.key == "access-token")
+            .expect("access-token spec");
         assert!(!tok.prompt);
     }
 
@@ -447,7 +574,8 @@ mod tests {
     fn resolve_skips_already_set_params() {
         let _tmp = with_temp_git_repo(|| {
             let mut cfg = make_cfg("s3");
-            cfg.params.insert("bucket".to_string(), "pre-set".to_string());
+            cfg.params
+                .insert("bucket".to_string(), "pre-set".to_string());
             let call_count = std::cell::Cell::new(0u32);
             resolve_with_injector(&mut cfg, |spec| {
                 if spec.key == "bucket" {
@@ -456,7 +584,11 @@ mod tests {
                 Ok(None)
             })
             .unwrap();
-            assert_eq!(call_count.get(), 0, "injector should not be called for pre-set params");
+            assert_eq!(
+                call_count.get(),
+                0,
+                "injector should not be called for pre-set params"
+            );
             assert_eq!(cfg.params["bucket"], "pre-set");
         });
     }
@@ -512,7 +644,10 @@ mod tests {
 
     #[test]
     fn git_config_key_format() {
-        assert_eq!(format!("opendal.{}.{}", "s3", "bucket"), "opendal.s3.bucket");
+        assert_eq!(
+            format!("opendal.{}.{}", "s3", "bucket"),
+            "opendal.s3.bucket"
+        );
         assert_eq!(
             format!("opendal.{}.{}", "azblob", "account-name"),
             "opendal.azblob.account-name"
