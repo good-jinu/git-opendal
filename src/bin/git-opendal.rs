@@ -10,6 +10,7 @@ use std::process::{Command as ProcessCommand, ExitCode};
 
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use serde::Serialize;
 
 const MIN_GIT: (u32, u32) = (2, 20);
 
@@ -18,7 +19,10 @@ Examples:
   git opendal setup --backend fs --path /tmp/git-remotes/myrepo --push
   git opendal setup --backend s3 --bucket my-bucket --path repos/myrepo --push
   git opendal doctor --backend s3
-\nThe helper is still used by normal Git commands: git fetch, git pull, and git push.";
+  git opendal schema
+  git opendal --json doctor --backend s3
+
+The helper is still used by normal Git commands: git fetch, git pull, and git push.";
 
 /// Set up and inspect OpenDAL-backed Git remotes.
 ///
@@ -28,6 +32,10 @@ Examples:
 #[derive(Parser)]
 #[command(name = "git-opendal", version, after_help = AFTER_HELP)]
 struct Cli {
+    /// Emit machine-readable JSON output for scripting and AI agents
+    #[arg(global = true, long)]
+    json: bool,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -91,6 +99,8 @@ enum Command {
         #[arg(long)]
         backend: Option<Backend>,
     },
+    /// Print machine-readable schema for all backends, URL formats, and parameters
+    Schema,
 }
 
 #[derive(Args)]
@@ -106,8 +116,9 @@ struct Target {
     bucket: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize)]
 #[value(rename_all = "lower")]
+#[serde(rename_all = "lowercase")]
 enum Backend {
     Fs,
     S3,
@@ -181,9 +192,27 @@ impl Backend {
         let vars = self.credential_vars();
         vars.is_empty() || vars.iter().any(|name| env::var_os(name).is_some())
     }
+
+    fn schema(self) -> BackendSchema {
+        let url_format = match self.bucket_label() {
+            Some(label) => format!("opendal://{}/<{label}>/<path>", self.as_str()),
+            None => format!("opendal://{}/<path>", self.as_str()),
+        };
+        BackendSchema {
+            backend: self.as_str().to_string(),
+            url_format,
+            bucket_label: self.bucket_label().map(|s| s.to_string()),
+            credential_variables: self
+                .credential_vars()
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+            credential_hint: self.credential_hint().map(|s| s.to_string()),
+        }
+    }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 struct RemoteSpec {
     backend: Backend,
     bucket: Option<String>,
@@ -252,17 +281,145 @@ impl RemoteSpec {
     }
 }
 
+// ─── JSON Data Transfer Objects ──────────────────────────────────────────────
+
+#[derive(Serialize)]
+struct ErrorOutput {
+    success: bool,
+    error: String,
+}
+
+#[derive(Serialize)]
+struct DoctorOutput {
+    status: &'static str,
+    git: GitCheck,
+    helper: HelperCheck,
+    backend: Option<String>,
+    credentials: Option<CredentialsCheck>,
+}
+
+#[derive(Serialize)]
+struct GitCheck {
+    ok: bool,
+    version: Option<String>,
+    error: Option<String>,
+}
+
+#[derive(Serialize)]
+struct HelperCheck {
+    ok: bool,
+    found: bool,
+}
+
+#[derive(Serialize)]
+struct CredentialsCheck {
+    ok: bool,
+    variables: Vec<EnvVarStatus>,
+    hint: Option<String>,
+}
+
+#[derive(Serialize)]
+struct EnvVarStatus {
+    name: String,
+    set: bool,
+}
+
+#[derive(Serialize)]
+struct StatusOutput {
+    remote: String,
+    url: String,
+    backend: String,
+    bucket: Option<String>,
+    path: String,
+    storage: Option<StorageStatus>,
+    refs: Option<Vec<RefEntry>>,
+}
+
+#[derive(Serialize)]
+struct StorageStatus {
+    state: String,
+    bundles: usize,
+}
+
+#[derive(Serialize)]
+struct RefEntry {
+    sha: String,
+    name: String,
+}
+
+#[derive(Serialize)]
+struct SetupOutput {
+    success: bool,
+    remote: String,
+    url: String,
+    backend: String,
+    bucket: Option<String>,
+    path: String,
+    pushed: bool,
+    branch: Option<String>,
+}
+
+#[derive(Serialize)]
+struct BootstrapOutput {
+    success: bool,
+    remote: String,
+    branch: String,
+    url: String,
+}
+
+#[derive(Serialize)]
+struct UrlOutput {
+    url: String,
+    backend: String,
+    bucket: Option<String>,
+    path: String,
+}
+
+#[derive(Serialize)]
+struct BackendSchema {
+    backend: String,
+    url_format: String,
+    bucket_label: Option<String>,
+    credential_variables: Vec<String>,
+    credential_hint: Option<String>,
+}
+
+#[derive(Serialize)]
+struct SchemaOutput {
+    version: &'static str,
+    supported_backends: Vec<&'static str>,
+    backends: Vec<BackendSchema>,
+}
+
+// ─── Entry Point ─────────────────────────────────────────────────────────────
+
 fn main() -> ExitCode {
-    match run(Cli::parse()) {
+    let cli = Cli::parse();
+    let json = cli.json;
+
+    match run(cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("error: {error:#}");
+            if json {
+                let err_obj = ErrorOutput {
+                    success: false,
+                    error: format!("{error:#}"),
+                };
+                if let Ok(json_str) = serde_json::to_string_pretty(&err_obj) {
+                    eprintln!("{json_str}");
+                } else {
+                    eprintln!("{{\"success\":false,\"error\":\"{error:#}\"}}");
+                }
+            } else {
+                eprintln!("error: {error:#}");
+            }
             ExitCode::FAILURE
         }
     }
 }
 
 fn run(cli: Cli) -> Result<()> {
+    let json = cli.json;
     match cli.command {
         Command::Doctor { backend, remote } => {
             let backend = match (backend, remote) {
@@ -270,10 +427,21 @@ fn run(cli: Cli) -> Result<()> {
                 (None, Some(remote)) => Some(RemoteSpec::parse_url(&remote_url(&remote)?)?.backend),
                 (None, None) => None,
             };
-            doctor(backend)
+            doctor(backend, json)
         }
         Command::Url { target } => {
-            println!("{}", RemoteSpec::from_target(&target)?.url());
+            let spec = RemoteSpec::from_target(&target)?;
+            if json {
+                let out = UrlOutput {
+                    url: spec.url(),
+                    backend: spec.backend.as_str().to_string(),
+                    bucket: spec.bucket.clone(),
+                    path: spec.path.clone(),
+                };
+                println!("{}", serde_json::to_string_pretty(&out)?);
+            } else {
+                println!("{}", spec.url());
+            }
             Ok(())
         }
         Command::Setup {
@@ -281,59 +449,147 @@ fn run(cli: Cli) -> Result<()> {
             remote,
             push,
             force,
-        } => setup(RemoteSpec::from_target(&target)?, &remote, push, force),
-        Command::Bootstrap { remote, branch } => bootstrap(&remote, branch.as_deref()),
-        Command::Status { remote, probe } => status(&remote, probe),
-        Command::Clone { url, directory } => clone(&url, directory.as_deref()),
-        Command::Config { backend } => config(backend),
+        } => setup(
+            RemoteSpec::from_target(&target)?,
+            &remote,
+            push,
+            force,
+            json,
+        ),
+        Command::Bootstrap { remote, branch } => {
+            bootstrap(&remote, branch.as_deref(), json)?;
+            Ok(())
+        }
+        Command::Status { remote, probe } => status(&remote, probe, json),
+        Command::Clone { url, directory } => clone(&url, directory.as_deref(), json),
+        Command::Config { backend } => config(backend, json),
+        Command::Schema => schema(json),
     }
 }
 
-fn doctor(backend: Option<Backend>) -> Result<()> {
+fn schema(json: bool) -> Result<()> {
+    let schema_data = SchemaOutput {
+        version: env!("CARGO_PKG_VERSION"),
+        supported_backends: Backend::ALL.iter().map(|b| b.as_str()).collect(),
+        backends: Backend::ALL.iter().map(|b| b.schema()).collect(),
+    };
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&schema_data)?);
+    } else {
+        println!("git-opendal v{}", schema_data.version);
+        println!(
+            "Supported backends: {}",
+            schema_data.supported_backends.join(", ")
+        );
+        println!();
+        for b in &schema_data.backends {
+            println!("{}: {}", b.backend, b.url_format);
+            if let Some(ref hint) = b.credential_hint {
+                println!("  {hint}");
+            }
+        }
+    }
+    Ok(())
+}
+
+fn doctor(backend: Option<Backend>, json: bool) -> Result<()> {
     let mut failed = false;
-    match git_capture(&["--version"]) {
-        Ok(version) if git_version_at_least(&version, MIN_GIT) => println!("ok   git: {version}"),
+
+    let git_check = match git_capture(&["--version"]) {
+        Ok(version) if git_version_at_least(&version, MIN_GIT) => GitCheck {
+            ok: true,
+            version: Some(version),
+            error: None,
+        },
         Ok(version) => {
             failed = true;
-            println!(
-                "fail git: {version}; git >= {}.{} is required",
-                MIN_GIT.0, MIN_GIT.1
-            );
+            GitCheck {
+                ok: false,
+                version: Some(version),
+                error: Some(format!("git >= {}.{} is required", MIN_GIT.0, MIN_GIT.1)),
+            }
         }
         Err(error) => {
             failed = true;
-            println!("fail git: {error}");
+            GitCheck {
+                ok: false,
+                version: None,
+                error: Some(error.to_string()),
+            }
         }
-    }
+    };
 
-    if helper_installed() {
-        println!("ok   git-remote-opendal: found on PATH");
-    } else {
+    let helper_ok = helper_installed();
+    if !helper_ok {
         failed = true;
-        println!("fail git-remote-opendal: not found on PATH");
-        println!("     install this package with: cargo install --locked git-opendal");
     }
+    let helper_check = HelperCheck {
+        ok: helper_ok,
+        found: helper_ok,
+    };
 
-    if let Some(backend) = backend {
-        for variable in backend.credential_vars() {
-            let state = if env::var_os(variable).is_some() {
-                "set"
+    let creds_check = backend.map(|b| {
+        let vars: Vec<EnvVarStatus> = b
+            .credential_vars()
+            .iter()
+            .map(|&name| EnvVarStatus {
+                name: name.to_string(),
+                set: env::var_os(name).is_some(),
+            })
+            .collect();
+        let present = b.credentials_present();
+        CredentialsCheck {
+            ok: present,
+            variables: vars,
+            hint: if !present {
+                b.credential_hint().map(|s| s.to_string())
             } else {
-                "not set"
-            };
-            println!("info {variable}: {state}");
+                None
+            },
         }
-        if !backend.credentials_present()
-            && let Some(hint) = backend.credential_hint()
-        {
-            println!(
-                "warn {} credentials: no credential variables detected",
-                backend.as_str()
-            );
-            println!("     {hint}");
-        }
+    });
+
+    if json {
+        let out = DoctorOutput {
+            status: if failed { "fail" } else { "ok" },
+            git: git_check,
+            helper: helper_check,
+            backend: backend.map(|b| b.as_str().to_string()),
+            credentials: creds_check,
+        };
+        println!("{}", serde_json::to_string_pretty(&out)?);
     } else {
-        println!("info add --backend <backend> to check credential variables");
+        if git_check.ok {
+            println!("ok   git: {}", git_check.version.as_deref().unwrap_or(""));
+        } else if let Some(ref err) = git_check.error {
+            println!("fail git: {err}");
+        }
+
+        if helper_check.ok {
+            println!("ok   git-remote-opendal: found on PATH");
+        } else {
+            println!("fail git-remote-opendal: not found on PATH");
+            println!("     install this package with: cargo install --locked git-opendal");
+        }
+
+        if let Some(ref creds) = creds_check {
+            for v in &creds.variables {
+                let state = if v.set { "set" } else { "not set" };
+                println!("info {}: {state}", v.name);
+            }
+            if !creds.ok
+                && let Some(ref hint) = creds.hint
+            {
+                println!(
+                    "warn {} credentials: no credential variables detected",
+                    backend.map(|b| b.as_str()).unwrap_or("")
+                );
+                println!("     {hint}");
+            }
+        } else {
+            println!("info add --backend <backend> to check credential variables");
+        }
     }
 
     if failed {
@@ -343,26 +599,53 @@ fn doctor(backend: Option<Backend>) -> Result<()> {
     }
 }
 
-fn setup(spec: RemoteSpec, remote: &str, push: bool, force: bool) -> Result<()> {
+fn setup(spec: RemoteSpec, remote: &str, push: bool, force: bool, json: bool) -> Result<()> {
     require_work_tree()?;
-    doctor(Some(spec.backend))?;
+    // For non-json, run doctor checks visually. For json, verify silently.
+    if !json {
+        doctor(Some(spec.backend), false)?;
+    } else {
+        if !helper_installed() {
+            bail!("git-remote-opendal is not found on PATH; install this package first");
+        }
+    }
+
     if let Some(path) = spec.local_fs_path() {
         fs::create_dir_all(&path)
             .with_context(|| format!("create local storage directory {}", path.display()))?;
     }
-    register_remote(remote, &spec.url(), force)?;
-    println!("configured '{remote}' -> {}", spec.url());
+    register_remote(remote, &spec.url(), force, json)?;
+
+    let mut pushed_branch = None;
     if push {
-        bootstrap(remote, None)
-    } else {
-        Ok(())
+        let branch = bootstrap(remote, None, json)?;
+        pushed_branch = Some(branch);
     }
+
+    if json {
+        let out = SetupOutput {
+            success: true,
+            remote: remote.to_string(),
+            url: spec.url(),
+            backend: spec.backend.as_str().to_string(),
+            bucket: spec.bucket.clone(),
+            path: spec.path.clone(),
+            pushed: push,
+            branch: pushed_branch,
+        };
+        println!("{}", serde_json::to_string_pretty(&out)?);
+    } else {
+        println!("configured '{remote}' -> {}", spec.url());
+    }
+    Ok(())
 }
 
-fn register_remote(name: &str, url: &str, force: bool) -> Result<()> {
+fn register_remote(name: &str, url: &str, force: bool, json: bool) -> Result<()> {
     if let Ok(existing) = git_capture(&["remote", "get-url", name]) {
         if existing == url {
-            println!("remote '{name}' already points at {url}");
+            if !json {
+                println!("remote '{name}' already points at {url}");
+            }
             return Ok(());
         }
         if !force {
@@ -375,7 +658,7 @@ fn register_remote(name: &str, url: &str, force: bool) -> Result<()> {
     Ok(())
 }
 
-fn bootstrap(remote: &str, branch: Option<&str>) -> Result<()> {
+fn bootstrap(remote: &str, branch: Option<&str>, json: bool) -> Result<String> {
     require_work_tree()?;
     let url = remote_url(remote)?;
     let spec = RemoteSpec::parse_url(&url).context("bootstrap requires an opendal:// remote")?;
@@ -393,22 +676,31 @@ fn bootstrap(remote: &str, branch: Option<&str>) -> Result<()> {
     if branch.is_empty() {
         bail!("current branch is empty; pass a branch explicitly")
     }
-    warn_missing_credentials(spec.backend);
+    if !json {
+        warn_missing_credentials(spec.backend);
+    }
     git_passthrough(&["push", "-u", remote, &branch])?;
-    println!("published '{branch}' to '{remote}'");
-    Ok(())
+
+    if json {
+        let out = BootstrapOutput {
+            success: true,
+            remote: remote.to_string(),
+            branch: branch.clone(),
+            url,
+        };
+        println!("{}", serde_json::to_string_pretty(&out)?);
+    } else {
+        println!("published '{branch}' to '{remote}'");
+    }
+    Ok(branch)
 }
 
-fn status(remote: &str, probe: bool) -> Result<()> {
+fn status(remote: &str, probe: bool, json: bool) -> Result<()> {
     require_work_tree()?;
     let url = remote_url(remote)?;
-    println!("remote:  {remote}\nurl:     {url}");
     let spec = RemoteSpec::parse_url(&url).context("configured remote is not an opendal:// URL")?;
-    println!("backend: {}", spec.backend.as_str());
-    if let Some(bucket) = &spec.bucket {
-        println!("{}:  {bucket}", spec.backend.bucket_label().unwrap());
-    }
-    println!("path:    {}", spec.path);
+
+    let mut storage_status = None;
     if let Some(root) = spec.local_fs_path() {
         let refs = root.join("info/refs.json");
         let bundles = fs::read_dir(root.join("objects"))
@@ -421,51 +713,90 @@ fn status(remote: &str, probe: bool) -> Result<()> {
         } else {
             "initialized"
         };
-        println!("storage: {state} ({bundles} bundle(s))");
+        storage_status = Some(StorageStatus {
+            state: state.to_string(),
+            bundles,
+        });
     }
+
+    let mut probed_refs = None;
     if probe {
-        println!("refs:");
-        let refs = git_capture(&["ls-remote", remote])?;
-        if refs.is_empty() {
-            println!("  remote is empty")
-        } else {
-            for reference in refs.lines() {
-                println!("  {reference}");
+        let refs_raw = git_capture(&["ls-remote", remote])?;
+        let entries: Vec<RefEntry> = refs_raw
+            .lines()
+            .filter_map(|line| {
+                let mut parts = line.split_whitespace();
+                let sha = parts.next()?.to_string();
+                let name = parts.next()?.to_string();
+                Some(RefEntry { sha, name })
+            })
+            .collect();
+        probed_refs = Some(entries);
+    }
+
+    if json {
+        let out = StatusOutput {
+            remote: remote.to_string(),
+            url,
+            backend: spec.backend.as_str().to_string(),
+            bucket: spec.bucket.clone(),
+            path: spec.path.clone(),
+            storage: storage_status,
+            refs: probed_refs,
+        };
+        println!("{}", serde_json::to_string_pretty(&out)?);
+    } else {
+        println!("remote:  {remote}\nurl:     {url}");
+        println!("backend: {}", spec.backend.as_str());
+        if let Some(bucket) = &spec.bucket {
+            println!("{}:  {bucket}", spec.backend.bucket_label().unwrap());
+        }
+        println!("path:    {}", spec.path);
+        if let Some(ref storage) = storage_status {
+            println!("storage: {} ({} bundle(s))", storage.state, storage.bundles);
+        }
+        if probe {
+            println!("refs:");
+            if let Some(ref refs) = probed_refs {
+                if refs.is_empty() {
+                    println!("  remote is empty");
+                } else {
+                    for r in refs {
+                        println!("  {} {}", r.sha, r.name);
+                    }
+                }
             }
         }
     }
     Ok(())
 }
 
-fn clone(url: &str, directory: Option<&str>) -> Result<()> {
+fn clone(url: &str, directory: Option<&str>, json: bool) -> Result<()> {
     let spec = RemoteSpec::parse_url(url)?;
     if !helper_installed() {
         bail!("git-remote-opendal is not found on PATH; install this package first")
     }
-    warn_missing_credentials(spec.backend);
+    if !json {
+        warn_missing_credentials(spec.backend);
+    }
     match directory {
         Some(directory) => git_passthrough(&["clone", &spec.url(), directory]),
         None => git_passthrough(&["clone", &spec.url()]),
     }
 }
 
-fn config(backend: Option<Backend>) -> Result<()> {
+fn config(backend: Option<Backend>, json: bool) -> Result<()> {
     let backends = backend.map_or_else(|| Backend::ALL.to_vec(), |backend| vec![backend]);
-    for backend in backends {
-        match backend.bucket_label() {
-            Some(label) => println!(
-                "{}: opendal://{}/<{label}>/<path>",
-                backend.as_str(),
-                backend.as_str()
-            ),
-            None => println!(
-                "{}: opendal://{}/<path>",
-                backend.as_str(),
-                backend.as_str()
-            ),
-        }
-        if let Some(hint) = backend.credential_hint() {
-            println!("  {hint}");
+    let schemas: Vec<BackendSchema> = backends.iter().map(|b| b.schema()).collect();
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&schemas)?);
+    } else {
+        for s in &schemas {
+            println!("{}: {}", s.backend, s.url_format);
+            if let Some(ref hint) = s.credential_hint {
+                println!("  {hint}");
+            }
         }
     }
     Ok(())
@@ -583,5 +914,17 @@ mod tests {
     #[test]
     fn bucketed_backends_require_a_bucket() {
         assert!(RemoteSpec::new(Backend::Gcs, None, "repos/example").is_err());
+    }
+
+    #[test]
+    fn schema_output_contains_all_backends() {
+        let schema_data = SchemaOutput {
+            version: env!("CARGO_PKG_VERSION"),
+            supported_backends: Backend::ALL.iter().map(|b| b.as_str()).collect(),
+            backends: Backend::ALL.iter().map(|b| b.schema()).collect(),
+        };
+        assert_eq!(schema_data.supported_backends.len(), 5);
+        assert!(schema_data.supported_backends.contains(&"s3"));
+        assert!(schema_data.supported_backends.contains(&"fs"));
     }
 }

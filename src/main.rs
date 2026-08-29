@@ -56,8 +56,7 @@ async fn main() -> Result<()> {
     let mut cfg = config::RemoteConfig::from_url_and_env(&url)
         .context("Failed to parse remote configuration")?;
 
-    credentials::resolve(&mut cfg)
-        .context("Failed to resolve backend credentials")?;
+    credentials::resolve(&mut cfg).context("Failed to resolve backend credentials")?;
 
     debug!("remote config: {:?}", cfg);
 

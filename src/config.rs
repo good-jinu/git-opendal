@@ -105,11 +105,7 @@ fn inject_url_params(
         return Ok((root.to_string(), params));
     };
 
-    let value = root
-        .trim_start_matches('/')
-        .split('/')
-        .next()
-        .unwrap_or("");
+    let value = root.trim_start_matches('/').split('/').next().unwrap_or("");
 
     if value.is_empty() {
         bail!(
@@ -189,26 +185,38 @@ mod tests {
     #[test]
     #[serial]
     fn from_url_and_env_extracts_s3_bucket_from_path() {
-        let cfg = RemoteConfig::from_url_and_env("opendal://s3/my-bucket/repos/myrepo.git").unwrap();
+        let cfg =
+            RemoteConfig::from_url_and_env("opendal://s3/my-bucket/repos/myrepo.git").unwrap();
         assert_eq!(cfg.scheme, "s3");
         assert_eq!(cfg.root, "/repos/myrepo.git");
-        assert_eq!(cfg.params.get("bucket").map(String::as_str), Some("my-bucket"));
+        assert_eq!(
+            cfg.params.get("bucket").map(String::as_str),
+            Some("my-bucket")
+        );
     }
 
     #[test]
     fn from_url_and_env_extracts_gcs_bucket_from_path() {
-        let cfg = RemoteConfig::from_url_and_env("opendal://gcs/my-bucket/repos/myrepo.git").unwrap();
+        let cfg =
+            RemoteConfig::from_url_and_env("opendal://gcs/my-bucket/repos/myrepo.git").unwrap();
         assert_eq!(cfg.scheme, "gcs");
         assert_eq!(cfg.root, "/repos/myrepo.git");
-        assert_eq!(cfg.params.get("bucket").map(String::as_str), Some("my-bucket"));
+        assert_eq!(
+            cfg.params.get("bucket").map(String::as_str),
+            Some("my-bucket")
+        );
     }
 
     #[test]
     fn from_url_and_env_extracts_azblob_container_from_path() {
-        let cfg = RemoteConfig::from_url_and_env("opendal://azblob/my-container/repos/myrepo.git").unwrap();
+        let cfg = RemoteConfig::from_url_and_env("opendal://azblob/my-container/repos/myrepo.git")
+            .unwrap();
         assert_eq!(cfg.scheme, "azblob");
         assert_eq!(cfg.root, "/repos/myrepo.git");
-        assert_eq!(cfg.params.get("container").map(String::as_str), Some("my-container"));
+        assert_eq!(
+            cfg.params.get("container").map(String::as_str),
+            Some("my-container")
+        );
     }
 
     #[test]
@@ -237,8 +245,12 @@ mod tests {
         unsafe {
             std::env::set_var("OPENDAL_S3_BUCKET", "env-bucket");
         }
-        let cfg = RemoteConfig::from_url_and_env("opendal://s3/url-bucket/repos/myrepo.git").unwrap();
-        assert_eq!(cfg.params.get("bucket").map(String::as_str), Some("env-bucket"));
+        let cfg =
+            RemoteConfig::from_url_and_env("opendal://s3/url-bucket/repos/myrepo.git").unwrap();
+        assert_eq!(
+            cfg.params.get("bucket").map(String::as_str),
+            Some("env-bucket")
+        );
         assert_eq!(cfg.root, "/repos/myrepo.git");
         unsafe {
             std::env::remove_var("OPENDAL_S3_BUCKET");

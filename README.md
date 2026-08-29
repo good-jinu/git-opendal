@@ -155,10 +155,17 @@ git opendal setup --backend s3 --bucket my-git-bucket --path repos/myrepo --push
 
 # Validate prerequisites and credentials without changing a repository
 git opendal doctor --backend s3
+
+# Programmatic discovery & AI agent schema
+git opendal schema
+
+# Output all diagnostics and operations as machine-readable JSON
+git opendal --json doctor --backend s3
 ```
 
-Use `git opendal --help` for `bootstrap`, `status`, `clone`, `url`, and
-backend configuration guidance.
+Use `git opendal --help` for `bootstrap`, `status`, `clone`, `url`, `schema`, and
+backend configuration guidance. The global `--json` flag formats output (and errors) as
+structured JSON for automation and AI agents.
 
 ### URL format
 
