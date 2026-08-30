@@ -76,11 +76,13 @@ impl RemoteHelper {
                     }
                     self.handle_import(&refs).await?;
                 }
-                Some(Command::Push { src, dst }) => {
-                    let mut pushes = vec![(src, dst)];
+                Some(Command::Push { src, dst, force }) => {
+                    let mut pushes = vec![(src, dst, force)];
                     loop {
                         match protocol::read_command(&mut stdin)? {
-                            Some(Command::Push { src, dst }) => pushes.push((src, dst)),
+                            Some(Command::Push { src, dst, force }) => {
+                                pushes.push((src, dst, force))
+                            }
                             Some(Command::Blank) | None => break,
                             Some(other) => {
                                 bail!("Unexpected command during push batch: {:?}", other)
@@ -215,7 +217,7 @@ impl RemoteHelper {
     /// For each ref being pushed, resolves the local SHA, creates a git bundle
     /// containing only the new commits (excluding anything already on the
     /// remote), uploads it, and updates refs.json.
-    async fn handle_push(&mut self, pushes: &[(String, String)]) -> Result<()> {
+    async fn handle_push(&mut self, pushes: &[(String, String, bool)]) -> Result<()> {
         info!("push: {} ref(s)", pushes.len());
 
         let mut store = self.storage.load_refs().await?;
@@ -223,7 +225,7 @@ impl RemoteHelper {
             std::collections::HashMap::new();
         let mut push_details: Vec<(String, String, String, bool)> = Vec::new();
 
-        for (src, dst) in pushes {
+        for (src, dst, force) in pushes {
             if src.is_empty() {
                 // Deletion: `push :dst` — not yet supported.
                 warn!("push: deletion of '{}' not supported", dst);
@@ -231,13 +233,11 @@ impl RemoteHelper {
                 continue;
             }
 
-            let force = src.starts_with('+');
-            let src_ref = if force { &src[1..] } else { src };
-            let sha = self.resolve_ref(src_ref)?;
+            let sha = self.resolve_ref(src)?;
 
             // Non-fast-forward check (Issue 4)
             if let Some(old_sha) = store.refs.get(dst) {
-                if !force && !self.is_fast_forward(old_sha, &sha)? {
+                if !*force && !self.is_fast_forward(old_sha, &sha)? {
                     warn!("push: non-fast-forward for '{}' rejected", dst);
                     protocol::write_line(&format!("error {} non-fast-forward", dst))?;
                     continue;
@@ -245,7 +245,7 @@ impl RemoteHelper {
             }
 
             updated_refs.insert(dst.clone(), sha.clone());
-            push_details.push((src_ref.to_string(), dst.clone(), sha, force));
+            push_details.push((src.clone(), dst.clone(), sha, *force));
         }
 
         if updated_refs.is_empty() {

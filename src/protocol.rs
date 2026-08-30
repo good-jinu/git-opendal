@@ -27,7 +27,11 @@ pub enum Command {
     Import(Vec<String>),
 
     /// `push <src>:<dst>` — git wants to push a local ref to a remote ref.
-    Push { src: String, dst: String },
+    Push {
+        src: String,
+        dst: String,
+        force: bool,
+    },
 
     /// `option <key> <value>` — git sends options (verbosity, etc.).
     Option(String, String),
@@ -71,10 +75,15 @@ fn parse_command(line: &str) -> Result<Command> {
         "list" => Ok(Command::List),
         "import" => Ok(Command::Import(vec![rest.to_string()])),
         "push" => {
-            let mut parts = rest.splitn(2, ':');
+            let (force, refspec) = if let Some(stripped) = rest.strip_prefix('+') {
+                (true, stripped)
+            } else {
+                (false, rest)
+            };
+            let mut parts = refspec.splitn(2, ':');
             let src = parts.next().unwrap_or("").to_string();
             let dst = parts.next().unwrap_or("").to_string();
-            Ok(Command::Push { src, dst })
+            Ok(Command::Push { src, dst, force })
         }
         "option" => {
             let mut opt_parts = rest.splitn(2, ' ');
@@ -159,5 +168,53 @@ mod tests {
     #[test]
     fn parse_blank() {
         assert_eq!(parse_command("").unwrap(), Command::Blank);
+    }
+
+    #[test]
+    fn parse_push_standard() {
+        assert_eq!(
+            parse_command("push refs/heads/main:refs/heads/main").unwrap(),
+            Command::Push {
+                src: "refs/heads/main".to_string(),
+                dst: "refs/heads/main".to_string(),
+                force: false,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_push_force() {
+        assert_eq!(
+            parse_command("push +refs/heads/main:refs/heads/main").unwrap(),
+            Command::Push {
+                src: "refs/heads/main".to_string(),
+                dst: "refs/heads/main".to_string(),
+                force: true,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_push_delete() {
+        assert_eq!(
+            parse_command("push :refs/heads/main").unwrap(),
+            Command::Push {
+                src: "".to_string(),
+                dst: "refs/heads/main".to_string(),
+                force: false,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_push_force_delete() {
+        assert_eq!(
+            parse_command("push +:refs/heads/main").unwrap(),
+            Command::Push {
+                src: "".to_string(),
+                dst: "refs/heads/main".to_string(),
+                force: true,
+            }
+        );
     }
 }
