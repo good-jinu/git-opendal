@@ -66,3 +66,62 @@ pub fn build_s3(cfg: &RemoteConfig) -> Result<Operator> {
 
     Ok(opendal::Operator::new(b)?.finish())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_build_s3_missing_bucket() {
+        let cfg = RemoteConfig {
+            scheme: "s3".to_string(),
+            root: "/path".to_string(),
+            params: HashMap::new(),
+        };
+
+        let res = build_s3(&cfg);
+        assert!(res.is_err());
+        let err_msg = res.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("S3 requires a bucket"),
+            "Expected error message to contain 'S3 requires a bucket', got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_build_s3_minimal() {
+        let mut params = HashMap::new();
+        params.insert("bucket".to_string(), "my-bucket".to_string());
+        params.insert("region".to_string(), "us-east-1".to_string());
+
+        let cfg = RemoteConfig {
+            scheme: "s3".to_string(),
+            root: "/path".to_string(),
+            params,
+        };
+
+        let op = build_s3(&cfg);
+        assert!(op.is_ok(), "Expected build_s3 to succeed with bucket and region provided");
+    }
+
+    #[test]
+    fn test_build_s3_with_all_params() {
+        let mut params = HashMap::new();
+        params.insert("bucket".to_string(), "my-bucket".to_string());
+        params.insert("region".to_string(), "us-west-2".to_string());
+        params.insert("endpoint".to_string(), "https://s3.us-west-2.amazonaws.com".to_string());
+        params.insert("access-key-id".to_string(), "test-key-id".to_string());
+        params.insert("secret-access-key".to_string(), "test-secret-key".to_string());
+
+        let cfg = RemoteConfig {
+            scheme: "s3".to_string(),
+            root: "/path".to_string(),
+            params,
+        };
+
+        let op = build_s3(&cfg);
+        assert!(op.is_ok(), "Expected build_s3 to succeed with all parameters provided");
+    }
+}
