@@ -65,6 +65,13 @@ Developer workflows (commands discovered from README / files):
   git push origin main
   git clone opendal://fs/tmp/my-bare-repos/myrepo.git
 
+- Releases:
+  Releases are managed via `release-plz` (`release-plz.toml` and
+  `.github/workflows/release-plz.yml`). Conventional Commits (`feat:`, `fix:`,
+  `chore:`) merged to `main` update a standing Release PR. Merging that PR tags
+  the release, publishes to crates.io, compiles binary assets across 5 targets,
+  and publishes the GitHub Release with changelog.
+
 Project-specific conventions and gotchas:
 
 - Config resolution: backend parameters come only from

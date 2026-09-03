@@ -1,0 +1,183 @@
+name: Release-plz
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  CARGO_TERM_COLOR: always
+  PRODUCT_NAME: git-opendal
+  REMOTE_HELPER: git-remote-opendal
+  WORKFLOW_BINARY: git-opendal
+
+jobs:
+  release-plz:
+    name: Release-plz
+    runs-on: ubuntu-latest
+    outputs:
+      releases_created: ${{ steps.release-plz.outputs.releases_created }}
+      tag: ${{ steps.extract-tag.outputs.tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run release-plz
+        id: release-plz
+        uses: release-plz/action@v0.5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Determine released tag
+        id: extract-tag
+        if: steps.release-plz.outputs.releases_created == 'true'
+        run: |
+          TAG=$(echo '${{ steps.release-plz.outputs.releases }}' | jq -r '.[0].tag // empty')
+          if [ -z "$TAG" ]; then
+            TAG="v$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Released tag: $TAG"
+
+  build-binaries:
+    name: Build ${{ matrix.target }}
+    needs: release-plz
+    if: needs.release-plz.outputs.releases_created == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64 (musl for maximum portability)
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            cross: true
+            archive: tar.gz
+
+          # Linux aarch64 (musl)
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            cross: true
+            archive: tar.gz
+
+          # macOS x86_64
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            cross: false
+            archive: tar.gz
+
+          # macOS Apple Silicon
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            cross: false
+            archive: tar.gz
+
+          # Windows x86_64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            cross: false
+            archive: zip
+
+    steps:
+      - name: Checkout released tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-plz.outputs.tag }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry & build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - name: Build (native)
+        if: "!matrix.cross"
+        run: cargo build --release --locked --bins --target ${{ matrix.target }}
+
+      - name: Build (cross)
+        if: matrix.cross
+        run: cross build --release --locked --bins --target ${{ matrix.target }}
+
+      # ── Package ──────────────────────────────────────────────────────────────
+
+      - name: Package (tar.gz, Unix)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          STAGING="$PRODUCT_NAME-${{ needs.release-plz.outputs.tag }}-${{ matrix.target }}"
+          mkdir -p "$STAGING"
+          cp "target/${{ matrix.target }}/release/$REMOTE_HELPER" "$STAGING/"
+          cp "target/${{ matrix.target }}/release/$WORKFLOW_BINARY" "$STAGING/"
+          cp README.md LICENSE "$STAGING/" 2>/dev/null || true
+          tar -czf "$STAGING.tar.gz" "$STAGING"
+          echo "ASSET=$STAGING.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Package (zip, Windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $staging = "$env:PRODUCT_NAME-${{ needs.release-plz.outputs.tag }}-${{ matrix.target }}"
+          New-Item -ItemType Directory -Path $staging | Out-Null
+          Copy-Item "target\${{ matrix.target }}\release\$env:REMOTE_HELPER.exe" $staging\
+          Copy-Item "target\${{ matrix.target }}\release\$env:WORKFLOW_BINARY.exe" $staging\
+          if (Test-Path README.md) { Copy-Item README.md $staging\ }
+          if (Test-Path LICENSE)   { Copy-Item LICENSE   $staging\ }
+          Compress-Archive -Path $staging -DestinationPath "$staging.zip"
+          echo "ASSET=$staging.zip" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ASSET }}
+          path: ${{ env.ASSET }}
+          retention-days: 1
+
+  upload-assets:
+    name: Upload binary assets to GitHub Release
+    needs: [release-plz, build-binaries]
+    if: needs.release-plz.outputs.releases_created == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Attach artifacts to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release-plz.outputs.tag }}
+          files: |
+            artifacts/**

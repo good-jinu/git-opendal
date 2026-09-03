@@ -1,0 +1,17 @@
+[workspace]
+# Tag and release format matches historical tags (e.g. v0.4.1)
+git_tag_name = "v{{ version }}"
+git_release_name = "v{{ version }}"
+
+# git-opendal is a binary CLI package with no library API; disable cargo-semver-checks
+semver_check = false
+
+# Maintain CHANGELOG.md automatically using git-cliff engine
+changelog_update = true
+
+# Crates.io publishing options matching existing workflow
+publish = true
+publish_no_verify = true
+
+[changelog]
+protect_breaking_commits = true
