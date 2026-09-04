@@ -125,10 +125,18 @@ enum Backend {
     Gcs,
     Azblob,
     Gdrive,
+    Webdav,
 }
 
 impl Backend {
-    const ALL: [Self; 5] = [Self::Fs, Self::S3, Self::Gcs, Self::Azblob, Self::Gdrive];
+    const ALL: [Self; 6] = [
+        Self::Fs,
+        Self::S3,
+        Self::Gcs,
+        Self::Azblob,
+        Self::Gdrive,
+        Self::Webdav,
+    ];
 
     fn as_str(self) -> &'static str {
         match self {
@@ -137,6 +145,7 @@ impl Backend {
             Self::Gcs => "gcs",
             Self::Azblob => "azblob",
             Self::Gdrive => "gdrive",
+            Self::Webdav => "webdav",
         }
     }
 
@@ -147,7 +156,8 @@ impl Backend {
             "gcs" => Ok(Self::Gcs),
             "azblob" => Ok(Self::Azblob),
             "gdrive" => Ok(Self::Gdrive),
-            _ => bail!("unsupported backend '{value}'; use fs, s3, gcs, azblob, or gdrive"),
+            "webdav" => Ok(Self::Webdav),
+            _ => bail!("unsupported backend '{value}'; use fs, s3, gcs, azblob, gdrive, or webdav"),
         }
     }
 
@@ -155,7 +165,7 @@ impl Backend {
         match self {
             Self::S3 | Self::Gcs => Some("bucket"),
             Self::Azblob => Some("container"),
-            Self::Fs | Self::Gdrive => None,
+            Self::Fs | Self::Gdrive | Self::Webdav => None,
         }
     }
 
@@ -171,6 +181,7 @@ impl Backend {
                 "OPENDAL_GDRIVE_REFRESH_TOKEN",
                 "OPENDAL_GDRIVE_ACCESS_TOKEN",
             ],
+            Self::Webdav => &["OPENDAL_WEBDAV_ENDPOINT"],
         }
     }
 
@@ -185,6 +196,9 @@ impl Backend {
             Self::Gdrive => {
                 Some("set Google Drive OAuth variables, such as OPENDAL_GDRIVE_ACCESS_TOKEN")
             }
+            Self::Webdav => Some(
+                "set OPENDAL_WEBDAV_ENDPOINT (and OPENDAL_WEBDAV_USERNAME / OPENDAL_WEBDAV_PASSWORD if the server requires auth)",
+            ),
         }
     }
 
@@ -923,8 +937,9 @@ mod tests {
             supported_backends: Backend::ALL.iter().map(|b| b.as_str()).collect(),
             backends: Backend::ALL.iter().map(|b| b.schema()).collect(),
         };
-        assert_eq!(schema_data.supported_backends.len(), 5);
+        assert_eq!(schema_data.supported_backends.len(), 6);
         assert!(schema_data.supported_backends.contains(&"s3"));
         assert!(schema_data.supported_backends.contains(&"fs"));
+        assert!(schema_data.supported_backends.contains(&"webdav"));
     }
 }
