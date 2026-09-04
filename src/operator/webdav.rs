@@ -56,3 +56,61 @@ pub fn build_webdav(cfg: &RemoteConfig) -> Result<Operator> {
 
     Ok(opendal::Operator::new(b)?.finish())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_build_webdav_missing_endpoint() {
+        let cfg = RemoteConfig {
+            scheme: "webdav".to_string(),
+            root: "/remote.php/dav/files/user/repo".to_string(),
+            params: HashMap::new(),
+        };
+
+        let res = build_webdav(&cfg);
+        assert!(res.is_err());
+        let err_msg = res.unwrap_err().to_string();
+        assert!(err_msg.contains("WebDAV requires an endpoint"));
+    }
+
+    #[test]
+    fn test_build_webdav_minimal() {
+        let mut params = HashMap::new();
+        params.insert(
+            "endpoint".to_string(),
+            "https://cloud.example.com".to_string(),
+        );
+
+        let cfg = RemoteConfig {
+            scheme: "webdav".to_string(),
+            root: "/remote.php/dav/files/user/repo".to_string(),
+            params,
+        };
+
+        let op = build_webdav(&cfg);
+        assert!(op.is_ok());
+    }
+
+    #[test]
+    fn test_build_webdav_with_all_params() {
+        let mut params = HashMap::new();
+        params.insert(
+            "endpoint".to_string(),
+            "https://cloud.example.com".to_string(),
+        );
+        params.insert("username".to_string(), "testuser".to_string());
+        params.insert("password".to_string(), "testpass".to_string());
+
+        let cfg = RemoteConfig {
+            scheme: "webdav".to_string(),
+            root: "/remote.php/dav/files/user/repo".to_string(),
+            params,
+        };
+
+        let op = build_webdav(&cfg);
+        assert!(op.is_ok());
+    }
+}

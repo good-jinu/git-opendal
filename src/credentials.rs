@@ -546,6 +546,18 @@ mod tests {
     }
 
     #[test]
+    fn specs_webdav_endpoint_is_required() {
+        let specs = specs_for_scheme("webdav");
+        let endpoint = specs
+            .iter()
+            .find(|s| s.key == "endpoint")
+            .expect("endpoint spec");
+        assert!(endpoint.required);
+        assert!(!endpoint.sensitive);
+        assert!(endpoint.prompt);
+    }
+
+    #[test]
     fn specs_fs_is_empty() {
         assert!(specs_for_scheme("fs").is_empty());
     }
