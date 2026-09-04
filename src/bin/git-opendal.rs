@@ -937,8 +937,9 @@ mod tests {
             supported_backends: Backend::ALL.iter().map(|b| b.as_str()).collect(),
             backends: Backend::ALL.iter().map(|b| b.schema()).collect(),
         };
-        assert_eq!(schema_data.supported_backends.len(), 5);
+        assert_eq!(schema_data.supported_backends.len(), 6);
         assert!(schema_data.supported_backends.contains(&"s3"));
         assert!(schema_data.supported_backends.contains(&"fs"));
+        assert!(schema_data.supported_backends.contains(&"webdav"));
     }
 }

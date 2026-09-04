@@ -103,7 +103,10 @@ mod tests {
         };
 
         let op = build_s3(&cfg);
-        assert!(op.is_ok(), "Expected build_s3 to succeed with bucket and region provided");
+        assert!(
+            op.is_ok(),
+            "Expected build_s3 to succeed with bucket and region provided"
+        );
     }
 
     #[test]
@@ -111,9 +114,15 @@ mod tests {
         let mut params = HashMap::new();
         params.insert("bucket".to_string(), "my-bucket".to_string());
         params.insert("region".to_string(), "us-west-2".to_string());
-        params.insert("endpoint".to_string(), "https://s3.us-west-2.amazonaws.com".to_string());
+        params.insert(
+            "endpoint".to_string(),
+            "https://s3.us-west-2.amazonaws.com".to_string(),
+        );
         params.insert("access-key-id".to_string(), "test-key-id".to_string());
-        params.insert("secret-access-key".to_string(), "test-secret-key".to_string());
+        params.insert(
+            "secret-access-key".to_string(),
+            "test-secret-key".to_string(),
+        );
 
         let cfg = RemoteConfig {
             scheme: "s3".to_string(),
@@ -122,6 +131,9 @@ mod tests {
         };
 
         let op = build_s3(&cfg);
-        assert!(op.is_ok(), "Expected build_s3 to succeed with all parameters provided");
+        assert!(
+            op.is_ok(),
+            "Expected build_s3 to succeed with all parameters provided"
+        );
     }
 }
