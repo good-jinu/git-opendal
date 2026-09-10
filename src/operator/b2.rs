@@ -97,7 +97,10 @@ mod tests {
     fn base_params() -> HashMap<String, String> {
         let mut p = HashMap::new();
         p.insert("bucket".to_string(), "my-bucket".to_string());
-        p.insert("bucket-id".to_string(), "e73ede9969c64867a77587cb".to_string());
+        p.insert(
+            "bucket-id".to_string(),
+            "e73ede9969c64867a77587cb".to_string(),
+        );
         p.insert("application-key-id".to_string(), "000abc".to_string());
         p.insert("application-key".to_string(), "K0007xyz".to_string());
         p
@@ -133,7 +136,10 @@ mod tests {
     fn test_build_b2_missing_application_key_id() {
         let mut params = HashMap::new();
         params.insert("bucket".to_string(), "my-bucket".to_string());
-        params.insert("bucket-id".to_string(), "e73ede9969c64867a77587cb".to_string());
+        params.insert(
+            "bucket-id".to_string(),
+            "e73ede9969c64867a77587cb".to_string(),
+        );
         let cfg = RemoteConfig {
             scheme: "b2".to_string(),
             root: "/".to_string(),
@@ -148,7 +154,10 @@ mod tests {
     fn test_build_b2_missing_application_key() {
         let mut params = HashMap::new();
         params.insert("bucket".to_string(), "my-bucket".to_string());
-        params.insert("bucket-id".to_string(), "e73ede9969c64867a77587cb".to_string());
+        params.insert(
+            "bucket-id".to_string(),
+            "e73ede9969c64867a77587cb".to_string(),
+        );
         params.insert("application-key-id".to_string(), "000abc".to_string());
         let cfg = RemoteConfig {
             scheme: "b2".to_string(),
