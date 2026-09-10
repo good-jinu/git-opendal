@@ -11,6 +11,7 @@ use opendal::{Operator, layers::LoggingLayer};
 use tracing::debug;
 
 mod azblob;
+mod b2;
 mod fs;
 mod gcs;
 mod gdrive;
@@ -18,7 +19,7 @@ mod memory;
 mod s3;
 mod webdav;
 
-const USER_SUPPORTED_SCHEMES: &str = "s3, gcs, azblob, gdrive, webdav, fs";
+pub const USER_SUPPORTED_SCHEMES: &str = "s3, gcs, azblob, gdrive, webdav, fs, b2";
 
 /// Build a configured [`Operator`] for the remote.
 pub async fn build_operator(cfg: &RemoteConfig) -> Result<Operator> {
@@ -32,6 +33,7 @@ pub async fn build_operator(cfg: &RemoteConfig) -> Result<Operator> {
         "webdav" => webdav::build_webdav(cfg)?,
         "fs" => fs::build_fs(cfg)?,
         "memory" => memory::build_memory()?,
+        "b2" => b2::build_b2(cfg)?,
         other => bail!(
             "Unsupported scheme '{other}'. Supported: {USER_SUPPORTED_SCHEMES}.\n\
              Enable the matching 'services-<name>' feature and add a branch in operator.rs."
@@ -51,7 +53,7 @@ mod tests {
     fn user_supported_schemes_do_not_advertise_memory() {
         assert_eq!(
             USER_SUPPORTED_SCHEMES,
-            "s3, gcs, azblob, gdrive, webdav, fs"
+            "s3, gcs, azblob, gdrive, webdav, fs, b2"
         );
         assert!(!USER_SUPPORTED_SCHEMES.contains("memory"));
     }
