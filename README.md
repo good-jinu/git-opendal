@@ -175,12 +175,12 @@ opendal://<scheme>/<root-path>
 
 | Part | Description |
 |------|-------------|
-| `scheme` | OpenDAL backend: `s3`, `gcs`, `azblob`, `gdrive`, `webdav`, `fs` |
+| `scheme` | OpenDAL backend: `s3`, `gcs`, `azblob`, `gdrive`, `webdav`, `b2`, `fs` |
 | `root-path` | Path inside the backend that acts as the repository root |
 
-For bucketed/container backends (`s3`, `gcs`, `azblob`), the first path
+For bucketed/container backends (`s3`, `gcs`, `azblob`, `b2`), the first path
 segment is used as the bucket/container name and the rest is the repository
-root. Example: `opendal://s3/my-bucket/repos/myrepo`.
+root. Example: `opendal://s3/my-bucket/repos/myrepo` or `opendal://b2/my-bucket/repos/myrepo`.
 
 The `memory` backend exists only for unit tests and single-process debugging.
 It is not suitable for normal Git operations because each helper invocation gets
@@ -291,6 +291,24 @@ git push origin main
 The URL path is the repository root on the server; the endpoint (scheme +
 host, and any base path your server needs) is configured via
 `OPENDAL_WEBDAV_ENDPOINT`.
+
+---
+
+### Backblaze B2
+
+```bash
+# Set credentials
+export OPENDAL_B2_BUCKET=my-git-bucket
+export OPENDAL_B2_BUCKET_ID=e73ede9969c64867a77587cb
+export OPENDAL_B2_APPLICATION_KEY_ID=000abc123def456...
+export OPENDAL_B2_APPLICATION_KEY=K0007xyz...
+
+# Configure the remote and publish the current branch
+git opendal setup --backend b2 --bucket my-git-bucket --path myrepo --push
+
+# Use normal Git commands afterward
+git clone opendal://b2/my-git-bucket/myrepo
+```
 
 ---
 

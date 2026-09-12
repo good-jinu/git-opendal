@@ -50,6 +50,10 @@
 //! | **WebDAV** | `OPENDAL_WEBDAV_ENDPOINT` | **Required.** Server URL (e.g., `https://cloud.example.com`). |
 //! | | `OPENDAL_WEBDAV_USERNAME` | Basic-auth username. |
 //! | | `OPENDAL_WEBDAV_PASSWORD` | Basic-auth password or app token. |
+//! | **B2** | `OPENDAL_B2_BUCKET` | **Required.** Bucket name (or URL first segment). |
+//! | | `OPENDAL_B2_BUCKET_ID` | **Required.** Backblaze Bucket ID. |
+//! | | `OPENDAL_B2_APPLICATION_KEY_ID` | **Required.** Application Key ID. |
+//! | | `OPENDAL_B2_APPLICATION_KEY` | **Required.** Application Key. |
 
 use anyhow::{Result, bail};
 use std::collections::HashMap;
@@ -99,7 +103,7 @@ fn inject_url_params(
     mut params: HashMap<String, String>,
 ) -> Result<(String, HashMap<String, String>)> {
     let required_key = match scheme {
-        "s3" | "gcs" => Some("bucket"),
+        "s3" | "gcs" | "b2" => Some("bucket"),
         "azblob" => Some("container"),
         _ => None,
     };
@@ -219,6 +223,18 @@ mod tests {
         assert_eq!(
             cfg.params.get("container").map(String::as_str),
             Some("my-container")
+        );
+    }
+
+    #[test]
+    fn from_url_and_env_extracts_b2_bucket_from_path() {
+        let cfg =
+            RemoteConfig::from_url_and_env("opendal://b2/my-bucket/repos/myrepo.git").unwrap();
+        assert_eq!(cfg.scheme, "b2");
+        assert_eq!(cfg.root, "/repos/myrepo.git");
+        assert_eq!(
+            cfg.params.get("bucket").map(String::as_str),
+            Some("my-bucket")
         );
     }
 

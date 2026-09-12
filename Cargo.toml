@@ -21,16 +21,7 @@ path = "src/bin/git-opendal.rs"
 [dependencies]
 # OpenDAL 0.56 — requires Rust ≥ 1.85.
 # Install a modern toolchain: rustup install stable && rustup default stable
-opendal = { version = "0.56", features = [
-    "services-s3",
-    "services-gcs",
-    "services-azblob",
-    "services-gdrive",
-    "services-webdav",
-    "services-fs",
-    "services-memory",
-    "layers-logging",
-] }
+opendal = { version = "0.56", features = ["services-s3", "services-gcs", "services-azblob", "services-gdrive", "services-webdav", "services-fs", "services-memory", "layers-logging", "services-b2"] }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
