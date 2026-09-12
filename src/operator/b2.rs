@@ -8,15 +8,14 @@
 //! automatically via `bucket_id`.
 //!
 //! Required parameters:
-//! - `bucket`    — bucket name, from the first URL path segment
-//!                 (e.g. `opendal://b2/my-bucket/repos/myrepo`) or
-//!                 `OPENDAL_B2_BUCKET`.
+//! - `bucket` — bucket name, from the first URL path segment
+//!   (e.g. `opendal://b2/my-bucket/repos/myrepo`) or `OPENDAL_B2_BUCKET`.
 //! - `bucket-id` — the numeric/alphanumeric bucket ID shown in the
-//!                 Backblaze console, or `OPENDAL_B2_BUCKET_ID`.
+//!   Backblaze console, or `OPENDAL_B2_BUCKET_ID`.
 //!
 //! Optional parameters:
 //! - `application-key-id` — B2 Application Key ID (`OPENDAL_B2_APPLICATION_KEY_ID`).
-//! - `application-key`    — B2 Application Key   (`OPENDAL_B2_APPLICATION_KEY`).
+//! - `application-key` — B2 Application Key (`OPENDAL_B2_APPLICATION_KEY`).
 //!
 //! # Configuration
 //!

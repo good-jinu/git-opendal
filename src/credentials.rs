@@ -54,6 +54,7 @@ pub fn specs_for_scheme(scheme: &str) -> &'static [ParamSpec] {
         "azblob" => AZBLOB_SPECS,
         "gdrive" => GDRIVE_SPECS,
         "webdav" => WEBDAV_SPECS,
+        "b2" => B2_SPECS,
         _ => &[],
     }
 }
@@ -229,6 +230,41 @@ static WEBDAV_SPECS: &[ParamSpec] = &[
         key: "password",
         description: "WebDAV password or app token",
         required: false,
+        sensitive: true,
+        prompt: true,
+        validator: None,
+    },
+];
+
+static B2_SPECS: &[ParamSpec] = &[
+    ParamSpec {
+        key: "bucket",
+        description: "Backblaze B2 bucket name",
+        required: true,
+        sensitive: false,
+        prompt: true,
+        validator: None,
+    },
+    ParamSpec {
+        key: "bucket-id",
+        description: "Backblaze B2 bucket ID",
+        required: true,
+        sensitive: false,
+        prompt: true,
+        validator: None,
+    },
+    ParamSpec {
+        key: "application-key-id",
+        description: "Backblaze B2 Application Key ID",
+        required: true,
+        sensitive: false,
+        prompt: true,
+        validator: None,
+    },
+    ParamSpec {
+        key: "application-key",
+        description: "Backblaze B2 Application Key",
+        required: true,
         sensitive: true,
         prompt: true,
         validator: None,
@@ -555,6 +591,19 @@ mod tests {
         assert!(endpoint.required);
         assert!(!endpoint.sensitive);
         assert!(endpoint.prompt);
+    }
+
+    #[test]
+    fn specs_b2_requires_bucket_id_and_keys() {
+        let specs = specs_for_scheme("b2");
+        assert_eq!(specs.len(), 4);
+        let key = specs
+            .iter()
+            .find(|s| s.key == "application-key")
+            .expect("application-key spec");
+        assert!(key.required);
+        assert!(key.sensitive);
+        assert!(key.prompt);
     }
 
     #[test]

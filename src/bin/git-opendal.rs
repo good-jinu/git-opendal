@@ -126,16 +126,18 @@ enum Backend {
     Azblob,
     Gdrive,
     Webdav,
+    B2,
 }
 
 impl Backend {
-    const ALL: [Self; 6] = [
+    const ALL: [Self; 7] = [
         Self::Fs,
         Self::S3,
         Self::Gcs,
         Self::Azblob,
         Self::Gdrive,
         Self::Webdav,
+        Self::B2,
     ];
 
     fn as_str(self) -> &'static str {
@@ -146,6 +148,7 @@ impl Backend {
             Self::Azblob => "azblob",
             Self::Gdrive => "gdrive",
             Self::Webdav => "webdav",
+            Self::B2 => "b2",
         }
     }
 
@@ -157,13 +160,16 @@ impl Backend {
             "azblob" => Ok(Self::Azblob),
             "gdrive" => Ok(Self::Gdrive),
             "webdav" => Ok(Self::Webdav),
-            _ => bail!("unsupported backend '{value}'; use fs, s3, gcs, azblob, gdrive, or webdav"),
+            "b2" => Ok(Self::B2),
+            _ => bail!(
+                "unsupported backend '{value}'; use fs, s3, gcs, azblob, gdrive, webdav, or b2"
+            ),
         }
     }
 
     fn bucket_label(self) -> Option<&'static str> {
         match self {
-            Self::S3 | Self::Gcs => Some("bucket"),
+            Self::S3 | Self::Gcs | Self::B2 => Some("bucket"),
             Self::Azblob => Some("container"),
             Self::Fs | Self::Gdrive | Self::Webdav => None,
         }
@@ -182,6 +188,11 @@ impl Backend {
                 "OPENDAL_GDRIVE_ACCESS_TOKEN",
             ],
             Self::Webdav => &["OPENDAL_WEBDAV_ENDPOINT"],
+            Self::B2 => &[
+                "OPENDAL_B2_BUCKET_ID",
+                "OPENDAL_B2_APPLICATION_KEY_ID",
+                "OPENDAL_B2_APPLICATION_KEY",
+            ],
         }
     }
 
@@ -198,6 +209,9 @@ impl Backend {
             }
             Self::Webdav => Some(
                 "set OPENDAL_WEBDAV_ENDPOINT (and OPENDAL_WEBDAV_USERNAME / OPENDAL_WEBDAV_PASSWORD if the server requires auth)",
+            ),
+            Self::B2 => Some(
+                "set OPENDAL_B2_BUCKET_ID, OPENDAL_B2_APPLICATION_KEY_ID, and OPENDAL_B2_APPLICATION_KEY",
             ),
         }
     }
@@ -937,9 +951,10 @@ mod tests {
             supported_backends: Backend::ALL.iter().map(|b| b.as_str()).collect(),
             backends: Backend::ALL.iter().map(|b| b.schema()).collect(),
         };
-        assert_eq!(schema_data.supported_backends.len(), 6);
+        assert_eq!(schema_data.supported_backends.len(), 7);
         assert!(schema_data.supported_backends.contains(&"s3"));
         assert!(schema_data.supported_backends.contains(&"fs"));
         assert!(schema_data.supported_backends.contains(&"webdav"));
+        assert!(schema_data.supported_backends.contains(&"b2"));
     }
 }
