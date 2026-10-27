@@ -21,20 +21,27 @@ use std::io;
 use std::process::{Command as SysCommand, Stdio};
 use tracing::{debug, info, warn};
 
-const REFSPEC: &str = "refs/heads/*:refs/heads/*";
-const REFSPEC_TAGS: &str = "refs/tags/*:refs/tags/*";
+/// Remote namespaces mapped into the private namespace by our refspecs.
+const MAPPED_NAMESPACES: [&str; 2] = ["heads", "tags"];
 
 pub struct RemoteHelper {
     storage: Storage,
     #[allow(dead_code)]
     cfg: RemoteConfig,
+    /// Private ref namespace that `import` writes to, e.g. `refs/opendal/origin`.
+    ///
+    /// Git reads imported tips from here and then applies the user's own fetch
+    /// refspec. Writing straight into `refs/heads/*` instead would move local
+    /// branches behind Git's back and break `git clone`.
+    private_prefix: String,
 }
 
 impl RemoteHelper {
-    pub fn new(op: Operator, cfg: RemoteConfig) -> Self {
+    pub fn new(op: Operator, cfg: RemoteConfig, remote_name: &str) -> Self {
         Self {
             storage: Storage::new(op),
             cfg,
+            private_prefix: private_prefix(remote_name),
         }
     }
 
@@ -109,8 +116,12 @@ impl RemoteHelper {
         protocol::write_line("import")?;
         protocol::write_line("push")?;
         protocol::write_line("option")?;
-        protocol::write_line(&format!("refspec {}", REFSPEC))?;
-        protocol::write_line(&format!("refspec {}", REFSPEC_TAGS))?;
+        for ns in MAPPED_NAMESPACES {
+            protocol::write_line(&format!(
+                "refspec refs/{ns}/*:{}/{ns}/*",
+                self.private_prefix
+            ))?;
+        }
         protocol::write_blank()?;
         Ok(())
     }
@@ -190,10 +201,21 @@ impl RemoteHelper {
         }
 
         protocol::write_raw(b"feature done\n")?;
+        // The private namespace mirrors the remote exactly, so a remote
+        // force-push must be allowed to rewind it. Git still applies its own
+        // fast-forward rules when copying into refs/remotes/*.
+        protocol::write_raw(b"feature force\n")?;
 
         for ref_name in refs {
+            let Some(private_ref) = private_ref(&self.private_prefix, ref_name) else {
+                warn!(
+                    "Requested ref '{}' is outside the mapped namespaces",
+                    ref_name
+                );
+                continue;
+            };
             if let Some(sha) = store.refs.get(ref_name) {
-                protocol::write_raw(format!("reset {}\nfrom {}\n\n", ref_name, sha).as_bytes())?;
+                protocol::write_raw(format!("reset {}\nfrom {}\n\n", private_ref, sha).as_bytes())?;
             } else {
                 warn!("Requested ref '{}' not found in remote store", ref_name);
             }
@@ -253,44 +275,45 @@ impl RemoteHelper {
             return Ok(());
         }
 
-        // Use UUID to avoid collisions (Issue 1)
-        let bundle_name = uuid::Uuid::new_v4().to_string();
-        let tmp_bundle =
-            tempfile::NamedTempFile::new().context("Failed to create temp bundle file")?;
-
-        let mut bundle_cmd = SysCommand::new("git");
-        bundle_cmd
-            .arg("bundle")
-            .arg("create")
-            .arg(tmp_bundle.path());
-
         // Use SRC ref names for bundle creation (Issue 2)
-        for (src_ref, _, _, _) in &push_details {
-            bundle_cmd.arg(src_ref);
-        }
-
+        let src_refs: Vec<&str> = push_details.iter().map(|(s, ..)| s.as_str()).collect();
         // Exclude commits the remote already has so bundles stay incremental.
-        for old_sha in store.refs.values() {
-            bundle_cmd.arg(format!("^{}", old_sha));
+        let exclusions: Vec<String> = store.refs.values().map(|sha| format!("^{sha}")).collect();
+
+        // A ref pointing at objects the remote already has (e.g. a new branch
+        // at an existing commit) needs no bundle, and `git bundle create`
+        // refuses to write an empty one.
+        if self.has_new_objects(&src_refs, &exclusions)? {
+            // Use UUID to avoid collisions (Issue 1)
+            let bundle_name = uuid::Uuid::new_v4().to_string();
+            let tmp_bundle =
+                tempfile::NamedTempFile::new().context("Failed to create temp bundle file")?;
+
+            let status = SysCommand::new("git")
+                .arg("bundle")
+                .arg("create")
+                .arg(tmp_bundle.path())
+                .args(&src_refs)
+                .args(&exclusions)
+                .stderr(Stdio::inherit())
+                .status()
+                .context("Failed to run 'git bundle create'")?;
+
+            if !status.success() {
+                bail!("'git bundle create' failed");
+            }
+
+            let bundle_data = std::fs::read(tmp_bundle.path()).context("Failed to read bundle")?;
+            // tmp_bundle will be deleted when dropped (Issue 7)
+
+            let bundle_key = self
+                .storage
+                .upload_bundle(&bundle_name, bundle_data)
+                .await?;
+            store.bundles.push(bundle_key);
+        } else {
+            info!("push: remote already has every object, skipping bundle upload");
         }
-
-        let status = bundle_cmd
-            .stderr(Stdio::inherit())
-            .status()
-            .context("Failed to run 'git bundle create'")?;
-
-        if !status.success() {
-            bail!("'git bundle create' failed");
-        }
-
-        let bundle_data = std::fs::read(tmp_bundle.path()).context("Failed to read bundle")?;
-        // tmp_bundle will be deleted when dropped (Issue 7)
-
-        let bundle_key = self
-            .storage
-            .upload_bundle(&bundle_name, bundle_data)
-            .await?;
-        store.bundles.push(bundle_key);
         for (dst, sha) in &updated_refs {
             store.refs.insert(dst.clone(), sha.clone());
         }
@@ -303,6 +326,23 @@ impl RemoteHelper {
 
         info!("push: {} ref(s) updated", updated_refs.len());
         Ok(())
+    }
+
+    /// Whether `revs` reach any object (commit, tree, blob or tag) outside `exclusions`.
+    fn has_new_objects(&self, revs: &[&str], exclusions: &[String]) -> Result<bool> {
+        let output = SysCommand::new("git")
+            .args(["rev-list", "--objects"])
+            .args(revs)
+            .args(exclusions)
+            .stderr(Stdio::inherit())
+            .output()
+            .context("Failed to run 'git rev-list'")?;
+
+        if !output.status.success() {
+            bail!("'git rev-list --objects' failed");
+        }
+
+        Ok(!output.stdout.is_empty())
     }
 
     fn is_fast_forward(&self, old_sha: &str, new_sha: &str) -> Result<bool> {
@@ -341,6 +381,37 @@ impl RemoteHelper {
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
+/// Build the private namespace for a remote. Git passes the URL itself as the
+/// remote name for anonymous remotes, so anything outside `[A-Za-z0-9_-]` is
+/// replaced to keep the result a valid ref name.
+fn private_prefix(remote_name: &str) -> String {
+    let safe: String = remote_name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let safe = if safe.is_empty() {
+        "_".to_string()
+    } else {
+        safe
+    };
+    format!("refs/opendal/{safe}")
+}
+
+/// Map a remote ref (`refs/heads/x`, `refs/tags/x`) into the private namespace.
+fn private_ref(prefix: &str, remote_ref: &str) -> Option<String> {
+    MAPPED_NAMESPACES.iter().find_map(|ns| {
+        remote_ref
+            .strip_prefix(&format!("refs/{ns}/"))
+            .map(|rest| format!("{prefix}/{ns}/{rest}"))
+    })
+}
+
 fn option_response(key: &str) -> &'static str {
     match key {
         "verbosity" => "ok",
@@ -361,5 +432,34 @@ mod tests {
     #[test]
     fn verbosity_option_is_supported() {
         assert_eq!(option_response("verbosity"), "ok");
+    }
+
+    #[test]
+    fn private_prefix_uses_remote_name() {
+        assert_eq!(private_prefix("origin"), "refs/opendal/origin");
+    }
+
+    #[test]
+    fn private_prefix_sanitizes_url_remote_names() {
+        assert_eq!(
+            private_prefix("opendal://fs/tmp/my.repo"),
+            "refs/opendal/opendal___fs_tmp_my_repo"
+        );
+        assert_eq!(private_prefix(""), "refs/opendal/_");
+    }
+
+    #[test]
+    fn private_ref_maps_heads_and_tags() {
+        let p = "refs/opendal/origin";
+        assert_eq!(
+            private_ref(p, "refs/heads/feature/x").as_deref(),
+            Some("refs/opendal/origin/heads/feature/x")
+        );
+        assert_eq!(
+            private_ref(p, "refs/tags/v1").as_deref(),
+            Some("refs/opendal/origin/tags/v1")
+        );
+        assert_eq!(private_ref(p, "HEAD"), None);
+        assert_eq!(private_ref(p, "refs/notes/x"), None);
     }
 }

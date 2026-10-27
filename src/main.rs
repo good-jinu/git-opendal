@@ -43,9 +43,10 @@ async fn main() -> Result<()> {
 
     // Git remote helpers receive: <program> <remote-name> <url>
     // The remote-name may be absent in some invocations (e.g. direct test).
-    let url = match args.len() {
-        3 => args[2].clone(),
-        2 => args[1].clone(),
+    // Without a remote name, fall back to the URL, as Git does for anonymous remotes.
+    let (remote_name, url) = match args.len() {
+        3 => (args[1].clone(), args[2].clone()),
+        2 => (args[1].clone(), args[1].clone()),
         _ => bail!(
             "Usage: git-remote-opendal <remote-name> <url>\n\
              Got args: {:?}",
@@ -64,7 +65,7 @@ async fn main() -> Result<()> {
         .await
         .context("Failed to initialize OpenDAL operator")?;
 
-    let mut h = helper::RemoteHelper::new(op, cfg);
+    let mut h = helper::RemoteHelper::new(op, cfg, &remote_name);
     h.run().await.context("Remote helper error")?;
 
     Ok(())
