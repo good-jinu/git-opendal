@@ -7,7 +7,12 @@
 //! Required parameter: `bucket`, supplied either as the first path segment of
 //! the remote URL (e.g. `opendal://s3/my-bucket/repos/myrepo`) or via
 //! `OPENDAL_S3_BUCKET`. Optional params: `region`, `endpoint`,
-//! `access-key-id`, `secret-access-key`.
+//! `access-key-id`, `secret-access-key`, `session-token`.
+//!
+//! `session-token` lets callers pass temporary credentials (STS, SSO,
+//! container roles) through `OPENDAL_S3_*` alongside the key pair. Without it
+//! such credentials could only come from the ambient `AWS_*` variables, which
+//! any `OPENDAL_S3_ACCESS_KEY_ID` already in the environment overrides.
 //!
 //! # Configuration
 //!
@@ -19,6 +24,8 @@
 //! export OPENDAL_S3_ENDPOINT=https://s3.amazonaws.com
 //! export OPENDAL_S3_ACCESS_KEY_ID=access_key
 //! export OPENDAL_S3_SECRET_ACCESS_KEY=secret_key
+//! # Only for temporary credentials:
+//! export OPENDAL_S3_SESSION_TOKEN=session_token
 //! ```
 
 use crate::config::RemoteConfig;
@@ -33,6 +40,7 @@ use opendal::Operator;
 /// - `endpoint`
 /// - `access-key-id`
 /// - `secret-access-key`
+/// - `session-token`
 pub fn build_s3(cfg: &RemoteConfig) -> Result<Operator> {
     use anyhow::anyhow;
     use opendal::services::S3;
@@ -62,6 +70,9 @@ pub fn build_s3(cfg: &RemoteConfig) -> Result<Operator> {
     }
     if let Some(v) = cfg.params.get("secret-access-key") {
         b = b.secret_access_key(v);
+    }
+    if let Some(v) = cfg.params.get("session-token") {
+        b = b.session_token(v);
     }
 
     Ok(opendal::Operator::new(b)?.finish())
@@ -122,6 +133,10 @@ mod tests {
         params.insert(
             "secret-access-key".to_string(),
             "test-secret-key".to_string(),
+        );
+        params.insert(
+            "session-token".to_string(),
+            "test-session-token".to_string(),
         );
 
         let cfg = RemoteConfig {

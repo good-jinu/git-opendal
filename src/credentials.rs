@@ -100,6 +100,15 @@ static S3_SPECS: &[ParamSpec] = &[
         prompt: true,
         validator: None,
     },
+    // Temporary credentials expire, so never prompt for or save this one.
+    ParamSpec {
+        key: "session-token",
+        description: "AWS session token",
+        required: false,
+        sensitive: true,
+        prompt: false,
+        validator: None,
+    },
 ];
 
 static GCS_SPECS: &[ParamSpec] = &[
@@ -579,6 +588,18 @@ mod tests {
         assert!(!secret.required);
         assert!(secret.sensitive);
         assert!(secret.prompt);
+    }
+
+    #[test]
+    fn specs_s3_session_token_is_not_prompted() {
+        let specs = specs_for_scheme("s3");
+        let token = specs
+            .iter()
+            .find(|s| s.key == "session-token")
+            .expect("session-token spec");
+        assert!(!token.required);
+        assert!(token.sensitive);
+        assert!(!token.prompt);
     }
 
     #[test]
