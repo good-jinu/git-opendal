@@ -181,3 +181,67 @@ jobs:
           tag_name: ${{ needs.release-plz.outputs.tag }}
           files: |
             artifacts/**
+
+  docker-image:
+    name: Publish Docker image to GHCR
+    needs: [release-plz, build-binaries]
+    if: needs.release-plz.outputs.releases_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout released tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-plz.outputs.tag }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Download all binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/artifacts
+          merge-multiple: true
+
+      - name: Prepare pre-compiled binaries for Docker build
+        run: |
+          mkdir -p docker-bin/amd64 docker-bin/arm64
+          tar -xzf /tmp/artifacts/*-x86_64-unknown-linux-musl.tar.gz --strip-components=1 -C docker-bin/amd64
+          tar -xzf /tmp/artifacts/*-aarch64-unknown-linux-musl.tar.gz --strip-components=1 -C docker-bin/arm64
+          chmod +x docker-bin/amd64/* docker-bin/arm64/*
+          ls -la docker-bin/amd64 docker-bin/arm64
+
+      - name: Determine lowercase image name
+        id: meta
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            BUILD_MODE=prebuilt
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ needs.release-plz.outputs.tag }}
+            ${{ steps.meta.outputs.image }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.release-plz.outputs.tag }}
+            org.opencontainers.image.licenses=MIT
