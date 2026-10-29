@@ -138,6 +138,90 @@ cp target/release/git-remote-opendal target/release/git-opendal ~/.local/bin/
 
 ---
 
+### Option 5 — Docker / Container image
+
+Multi-architecture container images (`linux/amd64` and `linux/arm64`) are automatically published to the GitHub Container Registry:
+
+```sh
+docker pull ghcr.io/good-jinu/git-opendal:latest
+```
+
+The container is lightweight (~35 MB, based on Alpine Linux) and includes `git`, `ca-certificates`, `openssh-client`, `git-remote-opendal`, and `git-opendal`.
+
+#### 1. Running `git-opendal` diagnostics & setup
+By default, the image entrypoint is `git-opendal`:
+
+```sh
+# Display CLI help
+docker run --rm ghcr.io/good-jinu/git-opendal --help
+
+# Validate backend configuration and credentials
+docker run --rm \
+  -e OPENDAL_S3_BUCKET=my-git-bucket \
+  -e OPENDAL_S3_ACCESS_KEY_ID="AKIA..." \
+  -e OPENDAL_S3_SECRET_ACCESS_KEY="..." \
+  -e OPENDAL_S3_REGION="us-east-1" \
+  ghcr.io/good-jinu/git-opendal doctor --backend s3
+```
+
+#### 2. Running Git operations (clone / fetch / push)
+To run standard `git` commands with OpenDAL remotes, mount your workspace volume and override the entrypoint with `--entrypoint git`:
+
+```sh
+# Clone from an S3-backed repository into the current directory
+docker run --rm -it \
+  -v "$(pwd)":/workspace -w /workspace \
+  -e OPENDAL_S3_BUCKET=my-git-bucket \
+  -e OPENDAL_S3_ACCESS_KEY_ID="AKIA..." \
+  -e OPENDAL_S3_SECRET_ACCESS_KEY="..." \
+  -e OPENDAL_S3_REGION="us-east-1" \
+  --entrypoint git \
+  ghcr.io/good-jinu/git-opendal clone opendal://s3/my-git-bucket/myrepo
+```
+
+#### 3. Using non-S3 backends or `.env` files
+You can supply credentials for any supported backend (GCS, Azure Blob, B2, WebDAV, etc.) using `--env-file` or volume-mounting credential files:
+
+```sh
+# Example: Backblaze B2 via .env file
+docker run --rm -it \
+  --env-file .env \
+  -v "$(pwd)":/workspace -w /workspace \
+  --entrypoint git \
+  ghcr.io/good-jinu/git-opendal clone opendal://b2/my-git-bucket/myrepo
+
+# Example: Google Cloud Storage with mounted service account key
+docker run --rm -it \
+  -v "$(pwd)":/workspace -w /workspace \
+  -v "/path/to/sa.json":/tmp/sa.json:ro \
+  -e OPENDAL_GCS_CREDENTIAL_PATH=/tmp/sa.json \
+  --entrypoint git \
+  ghcr.io/good-jinu/git-opendal clone opendal://gcs/my-gcs-bucket/myrepo
+
+# Example: Azure Blob Storage
+docker run --rm -it \
+  -v "$(pwd)":/workspace -w /workspace \
+  -e OPENDAL_AZBLOB_ACCOUNT_NAME="myaccount" \
+  -e OPENDAL_AZBLOB_ACCOUNT_KEY="..." \
+  --entrypoint git \
+  ghcr.io/good-jinu/git-opendal clone opendal://azblob/my-git-container/myrepo
+```
+
+#### 4. Usage in CI/CD pipelines
+The image can be used directly as a build environment in GitLab CI, GitHub Actions, or Kubernetes Jobs:
+
+```yaml
+# GitLab CI example
+job:
+  image: ghcr.io/good-jinu/git-opendal:latest
+  script:
+    - git clone opendal://s3/$BUCKET/myrepo
+    - cd myrepo
+    - git status
+```
+
+---
+
 ## Usage
 
 ### Guided setup with `git opendal`
