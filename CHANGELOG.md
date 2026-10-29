@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.4](https://github.com/good-jinu/git-opendal/compare/v0.4.3...v0.4.4) - 2026-10-29
+
+### Other
+
+- accept S3 session tokens via OPENDAL_S3_SESSION_TOKEN ([#19](https://github.com/good-jinu/git-opendal/pull/19))
+
 ## [0.4.3](https://github.com/good-jinu/git-opendal/compare/v0.4.2...v0.4.3) - 2026-10-27
 
 ### Other
