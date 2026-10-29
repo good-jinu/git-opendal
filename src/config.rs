@@ -35,6 +35,7 @@
 //! | | `OPENDAL_S3_ENDPOINT` | Custom endpoint (e.g., MinIO, B2). |
 //! | | `OPENDAL_S3_ACCESS_KEY_ID` | AWS Access Key. |
 //! | | `OPENDAL_S3_SECRET_ACCESS_KEY`| AWS Secret Key. |
+//! | | `OPENDAL_S3_SESSION_TOKEN` | Session token for temporary credentials. |
 //! | **GCS** | `OPENDAL_GCS_BUCKET` | **Required.** The GCS bucket name. |
 //! | | `OPENDAL_GCS_CREDENTIAL` | Raw JSON credential string. |
 //! | | `OPENDAL_GCS_CREDENTIAL_PATH` | Path to service account JSON file. |
